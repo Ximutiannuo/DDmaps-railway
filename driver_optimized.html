@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机路线规划系统</title>
+    
+    <!-- JavaScript模块 -->
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 独立CSS文件 -->
+    <link rel="stylesheet" href="css/driver.css">
+</head>
+
+<body>
+    <!-- ==================== 移动端优化布局 ==================== -->
+    <div class="app-container">
+        <!-- 顶部状态栏 -->
+        <div class="top-bar">
+            <span class="app-title" data-i18n="app_title">🚛 司机路线规划</span>
+            <div class="top-bar-right">
+                <button class="label-toggle-btn" id="toggle-labels" title="当前: 全部显示" data-mode="全部">
+                    <span class="label-icon">🏷️</span>
+                    <span class="label-text">全部</span>
+                </button>
+                <div class="lang-switcher">
+                    <button class="lang-btn active" data-lang="zh">中文</button>
+                    <button class="lang-btn" data-lang="en">EN</button>
+                    <button class="lang-btn" data-lang="ru">РУ</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 地图区域 -->
+        <div class="map-area">
+            <div class="map-container">
+                <div class="map-wrapper" id="map-wrapper">
+                    <div id="map">
+                        <div class="loading" data-i18n="loading_map">正在加载地图...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 浮动控制按钮 -->
+            <div class="map-floating-controls">
+                <button class="map-float-btn" id="zoom-in" title="放大">+</button>
+                <button class="map-float-btn" id="zoom-out" title="缩小">−</button>
+                <div class="zoom-display" id="zoom-level">50%</div>
+                <button class="map-float-btn" id="reset-map-view" title="重置视图">⟲</button>
+                <button class="map-float-btn" id="toggle-map-fullscreen" title="全屏">⛶</button>
+            </div>
+        </div>
+        
+        <!-- 底部面板 -->
+        <div class="bottom-panel half" id="bottom-panel">
+            <!-- 拖拽手柄 -->
+            <div class="panel-handle" id="panel-handle">
+                <div class="handle-bar"></div>
+                <div class="panel-status">
+                    <span class="status-dot"></span>
+                    <span id="connection-status" data-i18n="connected">已连接</span>
+                </div>
+            </div>
+            
+            <!-- 面板内容 -->
+            <div class="panel-content" id="panel-content">
+                <!-- 快捷操作 -->
+                <div class="quick-actions" id="quick-actions">
+                    <button class="quick-action-btn active" data-section="driver-section">
+                        <span class="quick-action-icon">👤</span>
+                        <span class="quick-action-label" data-i18n="driver_info_short">司机</span>
+                    </button>
+                    <button class="quick-action-btn" data-section="mode-section">
+                        <span class="quick-action-icon">🎮</span>
+                        <span class="quick-action-label" data-i18n="mode_short">模式</span>
+                    </button>
+                    <button class="quick-action-btn" data-section="route-section">
+                        <span class="quick-action-icon">🗺️</span>
+                        <span class="quick-action-label" data-i18n="route_short">路线</span>
+                    </button>
+                    <button class="quick-action-btn" data-section="result-section">
+                        <span class="quick-action-icon">📍</span>
+                        <span class="quick-action-label" data-i18n="result_short">结果</span>
+                    </button>
+                    <button class="quick-action-btn" data-section="history-section">
+                        <span class="quick-action-icon">📋</span>
+                        <span class="quick-action-label" data-i18n="history_short">记录</span>
+                    </button>
+                </div>
+                
+                <!-- 司机信息 -->
+                <div class="section collapsible" id="driver-section">
+                    <div class="section-title" data-i18n="driver_info">司机信息</div>
+                    <div class="section-summary" id="driver-section-summary"></div>
+                    <div class="section-content" id="driver-section-content">
+                        <div class="form-group">
+                            <label data-i18n="driver_id">司机ID *</label>
+                            <input type="text" id="driver-id" placeholder="请输入司机ID" data-i18n-placeholder="driver_id_placeholder" required>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="driver_name">姓名</label>
+                            <input type="text" id="driver-name" placeholder="请输入姓名" data-i18n-placeholder="driver_name_placeholder">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="license_plate">车牌号</label>
+                            <input type="text" id="driver-license-plate" placeholder="请输入车牌号" data-i18n-placeholder="license_plate_placeholder">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="driver_phone">联系电话</label>
+                            <input type="tel" id="driver-phone" placeholder="请输入联系电话" data-i18n-placeholder="driver_phone_placeholder">
+                        </div>
+                        <button id="register-driver" data-i18n="register">📝 注册/更新信息</button>
+                        <div id="driver-info-display" style="margin-top: 15px; padding: 12px; background: var(--bg-primary); border-radius: 10px; border: 1px solid var(--border); display: none;">
+                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--primary);" data-i18n="current_driver_info">当前司机信息</div>
+                            <div id="driver-info-content" style="font-size: 13px; color: var(--text-secondary);"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 运行模式 -->
+                <div class="section" id="mode-section">
+                    <div class="section-title" data-i18n="vehicle_mode_title">运行模式</div>
+                    <div class="form-group" id="vehicle-mode-group">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="display: flex; align-items: center; cursor: pointer; flex: 1; padding: 14px; background: var(--bg-primary); border: 2px solid var(--border); border-radius: 10px; transition: all 0.2s;">
+                                <input type="radio" name="vehicle-mode" value="auto" checked style="margin-right: 10px;" class="active-mode-radio">
+                                <span style="font-weight: 500;" data-i18n="vehicle_mode_auto">🚗 自动模式</span>
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer; flex: 1; padding: 14px; background: var(--bg-primary); border: 2px solid var(--border); border-radius: 10px; transition: all 0.2s;">
+                                <input type="radio" name="vehicle-mode" value="gps" style="margin-right: 10px;" class="active-mode-radio">
+                                <span style="font-weight: 500;" data-i18n="vehicle_mode_gps">📍 GPS模式</span>
+                            </label>
+                        </div>
+                        <small class="input-hint" style="margin-top: 10px; display: block; line-height: 1.6;" id="vehicle-mode-hint">
+                            <strong data-i18n="vehicle_mode_auto">自动模式</strong>：<span data-i18n="vehicle_mode_auto_desc">车辆按照设定速度自动沿路线行驶</span><br>
+                            <strong data-i18n="vehicle_mode_gps">GPS模式</strong>：<span data-i18n="vehicle_mode_gps_desc">车辆位置根据您的GPS实时更新</span>
+                        </small>
+                    </div>
+                </div>
+
+                <!-- 路线规划 -->
+                <div class="section" id="route-section">
+                    <div class="section-title" data-i18n="route_planning">路线规划</div>
+                    <div class="form-group">
+                        <label data-i18n="vehicle_type">车辆类型</label>
+                        <select id="vehicle-type"></select>
+                    </div>
+                    <div class="form-group">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label data-i18n="vehicle_weight">载重 (吨)</label>
+                                <input type="number" id="vehicle-weight" min="1" max="50" value="20">
+                            </div>
+                            <div>
+                                <label data-i18n="vehicle_width">宽度 (米)</label>
+                                <input type="number" id="vehicle-width" min="1" max="6" step="0.1" value="3">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="vehicle_speed_custom">自定义速度 (km/h)</label>
+                        <input type="number" id="vehicle-speed" min="1" max="120" step="1" placeholder="例如 35">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="planner_mode">路线算法</label>
+                        <select id="planner-mode">
+                            <option value="classic" selected data-i18n="planner_default_option">系统推荐（默认）</option>
+                            <option value="dqn" data-i18n="planner_dqn_option">深度学习（DQN）</option>
+                        </select>
+                    </div>
+                    <div class="form-group dqn-advanced" id="dqn-epsilon-group" style="display:none;">
+                        <label data-i18n="dqn_epsilon">探索率 ε (0-1)</label>
+                        <input type="number" id="dqn-epsilon" min="0" max="1" step="0.05" value="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="start_node">起点</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="start-node" style="flex: 1;"></select>
+                            <button type="button" id="get-location-btn" style="width: auto; padding: 12px 16px; background: var(--success);">
+                                <span id="get-location-btn-text">📍</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="target_node">终点</label>
+                        <select id="target-node"></select>
+                        <small class="input-hint" style="color: var(--primary); font-weight: 500;" data-i18n="click_node_hint">
+                            💡 提示：可在地图上直接点击节点选择终点
+                        </small>
+                    </div>
+                    <button id="calculate-route" data-i18n="calculate_route">🗺️ 计算最优路线</button>
+                </div>
+
+                <!-- 路线结果 -->
+                <div id="route-result" class="section" style="display: none;">
+                    <div class="section-title" id="route-result-title" data-i18n="route_result">路线结果</div>
+                    <div id="result-content"></div>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button id="submit-vehicle" style="flex: 1; background: var(--success);" data-i18n="submit_vehicle">✅ 提交车辆</button>
+                        <button id="mark-arrived" style="flex: 1; background: var(--warning); display: none;" data-i18n="mark_arrived">🏁 已到达</button>
+                    </div>
+                    <button id="cancel-navigation" style="width: 100%; margin-top: 10px; background: var(--danger); opacity: 0.85;" data-i18n="cancel_navigation">🚫 中断导航</button>
+                </div>
+                
+                <!-- 历史记录 -->
+                <div class="section" id="history-section">
+                    <div class="section-title" data-i18n="history">历史记录</div>
+                    <div id="history-list" style="max-height: 200px; overflow-y: auto;">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+                
+                <!-- 地图图例 -->
+                <div class="map-legend" id="driver-map-legend">
+                    <div class="map-legend-content">
+                        <div class="map-legend-section">
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#2ecc71;"></div>
+                                <span data-i18n="legend_entrance">进场口</span>
+                            </div>
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#3498db;"></div>
+                                <span data-i18n="legend_crossroad">交叉口</span>
+                            </div>
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#e74c3c;"></div>
+                                <span data-i18n="legend_work_area">作业区</span>
+                            </div>
+                        </div>
+                        <div class="map-legend-section">
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#e67e22; width:16px; height:3px; border-radius:0;"></div>
+                                <span data-i18n="legend_one_way">单向</span>
+                            </div>
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#e74c3c; width:16px; height:4px; border-radius:0;"></div>
+                                <span data-i18n="legend_congested">拥堵</span>
+                            </div>
+                            <div class="map-legend-item">
+                                <div class="map-legend-color" style="background:#27ae60; width:16px; height:5px; border-radius:2px;"></div>
+                                <span data-i18n="legend_route">我的路线</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 保留原container用于兼容性（隐藏） -->
+    <div class="container" style="display: none;"></div>
+
+    <!-- ==================== JavaScript代码 ==================== -->
+    <!-- 注意：由于JavaScript包含大量业务逻辑（约5000行），保留在HTML中 -->
+    <!-- 如需进一步优化，可将JavaScript提取到独立的 js/driver-main.js 文件 -->
+
+
+
+
+
+
+
+
+
+
+
+
+

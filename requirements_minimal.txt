@@ -1,0 +1,18 @@
+# 最小化依赖包（用于 PythonAnywhere 免费账户）
+# 只包含核心功能必需的包
+
+# Flask 核心
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# WebSocket 支持（PythonAnywhere 免费账户会使用轮询模式，但包仍需安装）
+flask-socketio==5.3.5
+python-socketio==5.10.0
+eventlet==0.33.3
+
+# 注意：以下包仅在特定功能中使用，如果不需要可以移除
+# - numpy, pandas: 仅在 DQN 训练中使用（如果不需要 AI 路径规划，可以移除）
+# - openpyxl: 仅在 Excel 导入功能中使用（如果不需要，可以移除）
+# - ezdxf: 仅在 DXF 文件导入功能中使用（如果不需要，可以移除）
+# - fonttools: 仅 openpyxl 的依赖（如果移除 openpyxl，也可以移除）
+

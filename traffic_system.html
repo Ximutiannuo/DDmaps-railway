@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工地交通调度系统 - 增强版（含路径优化）</title>
+    
+    <!-- 外部库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- 模块化 JavaScript 文件 -->
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/websocket.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700&family=Noto+Sans+Cyrillic:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- 样式表 -->
+    <link rel="stylesheet" href="css/traffic_system.css">
+</head>
+
+<body>
+    <!-- Toast 通知容器 -->
+    <div class="toast-container" id="toast-container"></div>
+    
+    <h1 data-i18n="system_title">工地交通调度系统 - 增强版（含路径优化）</h1>
+
+    <div class="container">
+        <!-- ==================== 侧边栏 ==================== -->
+        <div class="sidebar">
+            <!-- 标签页切换 -->
+            <div class="tab-container">
+                <div class="tab active" data-tab="vehicle-input" data-i18n="tab_vehicle_input">车辆调度</div>
+                <div class="tab" data-tab="map-settings" data-i18n="tab_map_settings">地图设置</div>
+                <div class="tab" data-tab="road-info" data-i18n="tab_road_info">路网信息</div>
+                <div class="tab" data-tab="monitor" data-i18n="tab_monitor">实时监控</div>
+                <div class="tab" data-tab="vehicle-config" data-i18n="tab_vehicle_config">车辆配置</div>
+                <div class="tab" data-tab="travel-time-db" data-i18n="tab_travel_time_db">行驶时间库</div>
+                <div class="tab" data-tab="driver-portal" data-i18n="tab_driver_portal">司机入口</div>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- ==================== 车辆调度 ==================== -->
+                <div class="tab-content active" id="vehicle-input">
+                    <!-- 车辆信息输入 -->
+                    <div class="section">
+                        <h2 data-i18n="vehicle_info_input">车辆信息输入</h2>
+                        <div class="form-group">
+                            <label for="vehicle-id" data-i18n="vehicle_id">车辆ID</label>
+                            <input type="text" id="vehicle-id" data-i18n-placeholder="vehicle_id_placeholder" placeholder="留空则自动编号">
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicle-type" data-i18n="vehicle_type">车辆类型</label>
+                            <select id="vehicle-type">
+                                <option value="渣土车" data-i18n="vehicle_type_truck">渣土车</option>
+                                <option value="材料车" data-i18n="vehicle_type_material">材料车</option>
+                                <option value="工程车" data-i18n="vehicle_type_construction">工程车</option>
+                                <option value="特种车" data-i18n="vehicle_type_special">特种车</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicle-weight" data-i18n="vehicle_weight">载重 (吨)</label>
+                            <input type="number" id="vehicle-weight" min="1" max="50" value="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicle-width" data-i18n="vehicle_width">宽度 (米)</label>
+                            <input type="number" id="vehicle-width" min="1" max="6" step="0.1" value="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="start-node-vehicle" data-i18n="start_node">起点节点</label>
+                            <select id="start-node-vehicle"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="target-node" data-i18n="target_node">目标区域</label>
+                            <select id="target-node"></select>
+                        </div>
+                        <button id="add-vehicle" data-i18n="add_vehicle">添加车辆</button>
+                    </div>
+
+                    <!-- 当前车辆 -->
+                    <div class="section">
+                        <h2 data-i18n="current_vehicles">当前车辆</h2>
+                        <div class="button-group">
+                            <button id="manual-reroute" data-i18n="manual_reroute">手动重算路径（所有）</button>
+                            <button id="sort-eff" class="success" data-i18n="sort_by_efficiency">按效率排序</button>
+                        </div>
+                        <div class="vehicle-list" id="vehicle-list">
+                            <div class="loading" data-i18n="loading_vehicle_data">正在加载车辆数据...</div>
+                        </div>
+                    </div>
+
+                    <!-- 调度控制 -->
+                    <div class="section">
+                        <h2 data-i18n="dispatch_control">调度控制</h2>
+                        <button id="start-dispatch" data-i18n="start_dispatch">开始调度</button>
+                        <button id="reset-system" class="danger" data-i18n="reset_system">重置系统</button>
+                    </div>
+                </div>
+
+                <!-- ==================== 地图设置 ==================== -->
+                <div class="tab-content" id="map-settings">
+                    <!-- 自定义地图 -->
+                    <div class="section">
+                        <h2 data-i18n="custom_map">自定义地图</h2>
+                        <div class="custom-map-upload" id="map-upload-area">
+                            <div id="map-upload-message">
+                                <p data-i18n="upload_map_hint">点击或拖拽图片到这里上传</p>
+                                <p class="vehicle-info" data-i18n="upload_map_format">支持 JPG、PNG 格式，建议尺寸 800x600 以上</p>
+                            </div>
+                            <input type="file" id="map-file-input" accept="image/*" class="hidden">
+                        </div>
+                        <button id="remove-map-background" class="danger hidden" data-i18n="remove_map_background">清除自定义地图</button>
+                        <div class="vehicle-info" data-i18n="map_background_hint">提示：仅替换底图，不会修改路网节点。</div>
+                    </div>
+
+                    <!-- 导入 DXF 路网 -->
+                    <div class="section">
+                        <h2 data-i18n="import_dxf">导入 DXF 路网</h2>
+                        <div class="custom-map-upload dxf-upload" id="dxf-upload-area">
+                            <p data-i18n="dxf_upload_hint">点击或拖拽 DXF 文件到这里导入</p>
+                            <p class="vehicle-info" data-i18n="dxf_requirements">要求：道路中心线图层为"道路中心线"或线型为 JIS_08_50</p>
+                            <input type="file" id="dxf-file-input" accept=".dxf" class="hidden">
+                        </div>
+                        <button id="import-dxf-btn" class="success" data-i18n="import_dxf_btn">导入 DXF 路网</button>
+                        <button id="dxf-to-json-btn" data-i18n="dxf_to_json_btn">DXF 转 JSON 并下载</button>
+                        <div class="vehicle-info" data-i18n="dxf_warning">导入后将覆盖现有节点与道路，请提前备份数据。</div>
+                    </div>
+
+                    <!-- JSON 路网管理 -->
+                    <div class="section">
+                        <h2 data-i18n="json_map_management">JSON 路网管理</h2>
+                        <div class="custom-map-upload json-upload" id="json-upload-area">
+                            <p data-i18n="json_upload_hint">点击或拖拽 JSON 文件到这里导入</p>
+                            <p class="vehicle-info" data-i18n="json_format_hint">支持由系统导出的路网 JSON 格式。</p>
+                            <input type="file" id="json-file-input" accept=".json,application/json" class="hidden">
+                        </div>
+                        <button id="import-json-btn" class="success" data-i18n="import_json_btn">导入 JSON 路网</button>
+                        <button id="export-json-btn" data-i18n="export_json_btn">导出当前路网为 JSON</button>
+                        <div class="vehicle-info" data-i18n="json_hint">提示：可将当前路网导出为 JSON 备份或分享。</div>
+                    </div>
+
+                    <!-- 地图拖动控制 -->
+                    <div class="section">
+                        <h2 data-i18n="map_drag_control">地图拖动控制</h2>
+                        <button id="toggle-map-drag" data-i18n="toggle_map_drag">地图拖动: 关闭</button>
+                        <div class="vehicle-info" data-i18n="map_drag_hint">提示：开启后，可以拖动整个地图（包括节点、道路等所有元素）</div>
+                    </div>
+
+                    <!-- 地图缩放控制 -->
+                    <div class="section">
+                        <h2 data-i18n="map_zoom_control">地图缩放控制</h2>
+                        <div class="button-group">
+                            <button id="zoom-in" data-i18n="zoom_in">放大 (+)</button>
+                            <button id="zoom-out" data-i18n="zoom_out">缩小 (-)</button>
+                            <button id="zoom-reset" class="secondary" data-i18n="zoom_reset">重置</button>
+                        </div>
+                        <div class="status-card">
+                            <span data-i18n="current_zoom">当前缩放:</span> <span id="zoom-level">100%</span>
+                        </div>
+                    </div>
+
+                    <!-- 节点管理 -->
+                    <div class="section">
+                        <h2 data-i18n="node_management">节点管理</h2>
+                        
+                        <!-- 显示隐藏节点 -->
+                        <div class="checkbox-container">
+                            <label>
+                                <input type="checkbox" id="show-hidden-nodes">
+                                <span data-i18n="show_hidden_nodes">显示隐藏的节点（高亮显示）</span>
+                            </label>
+                            <div class="vehicle-info" data-i18n="show_hidden_nodes_hint">
+                                开启后，所有隐藏的节点会以特殊样式显示在地图上，方便您重新设置它们的显示状态
+                            </div>
+                        </div>
+                        
+                        <!-- 显示支路节点 -->
+                        <div class="checkbox-container">
+                            <label>
+                                <input type="checkbox" id="show-branch-nodes">
+                                <span data-i18n="show_branch_nodes">显示支路节点（JIS_08_50）</span>
+                            </label>
+                            <div class="vehicle-info" data-i18n="show_branch_nodes_hint">
+                                开启后，会显示支路与支路相交的节点（线型为JIS_08_50的道路）
+                            </div>
+                        </div>
+                        
+                        <!-- 节点列表 -->
+                        <div class="node-list" id="node-list">
+                            <div class="loading" data-i18n="no_nodes">暂无节点，请添加节点</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="node-type" data-i18n="node_type">节点类型</label>
+                            <select id="node-type">
+                                <option value="entrance" data-i18n="node_type_entrance">进场口</option>
+                                <option value="crossroad" data-i18n="node_type_crossroad">交叉口</option>
+                                <option value="work-area" data-i18n="node_type_work_area">作业区</option>
+                                <option value="start" data-i18n="node_type_start">场外起点</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-name" data-i18n="node_name">节点名称</label>
+                            <input type="text" id="node-name" data-i18n-placeholder="node_name_placeholder" placeholder="例如: 进场口1">
+                        </div>
+                        <button id="add-node" data-i18n="add_node">添加节点</button>
+                        <button id="sync-positions" class="success" data-i18n="sync_positions">同步节点位置到后端</button>
+                        <button id="clear-nodes" class="danger" data-i18n="clear_nodes">清除所有节点</button>
+                        
+                        <!-- GPS坐标管理 -->
+                        <div class="gps-management">
+                            <h3 data-i18n="gps_management">GPS坐标管理</h3>
+                            <div class="button-group">
+                                <button id="export-gps" class="success" data-i18n="export_gps">📥 导出GPS坐标 (XLSX)</button>
+                                <button id="import-gps" data-i18n="import_gps">📤 导入GPS坐标 (XLSX)</button>
+                            </div>
+                            <input type="file" id="gps-file-input" accept=".xlsx,.xls" class="hidden">
+                            <div class="vehicle-info">
+                                <strong data-i18n="gps_instructions">使用说明：</strong><br>
+                                • <span data-i18n="gps_export_hint">导出：将所有节点的GPS坐标导出为Excel文件</span><br>
+                                • <span data-i18n="gps_import_hint">导入：从Excel文件批量导入GPS坐标</span><br>
+                                • <span data-i18n="gps_format_hint">格式：节点ID、名称、纬度、经度</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 地图文字框 -->
+                    <div class="section">
+                        <h2 data-i18n="map_text_boxes">地图文字框</h2>
+                        <div class="info-box">
+                            <strong data-i18n="text_box_instructions">使用说明：</strong><br>
+                            <span data-i18n="text_box_1">1. 开启编辑模式后，双击节点可编辑节点名称</span><br>
+                            <span data-i18n="text_box_2">2. 双击道路可编辑道路名称</span><br>
+                            <span data-i18n="text_box_3">3. 点击地图空白处可添加文字框</span><br>
+                            <span data-i18n="text_box_4">4. 双击文字框可编辑格式，拖动可移动位置</span>
+                        </div>
+                        <div class="labels-list" id="map-labels-list">
+                            <div class="loading" data-i18n="no_text_boxes">暂无文字框</div>
+                        </div>
+                    </div>
+
+                    <!-- 道路管理 -->
+                    <div class="section">
+                        <h2 data-i18n="road_management">道路管理</h2>
+                        <div class="form-group">
+                            <label for="start-node" data-i18n="start_node">起点节点</label>
+                            <select id="start-node"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-node" data-i18n="end_node">终点节点</label>
+                            <select id="end-node"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="road-length" data-i18n="road_length">道路长度 (米)</label>
+                            <input type="number" id="road-length" min="10" max="500" value="100">
+                        </div>
+                        <div class="form-group">
+                            <label for="road-direction" data-i18n="road_direction">道路方向</label>
+                            <select id="road-direction">
+                                <option value="two-way" data-i18n="road_direction_two_way">双向通行</option>
+                                <option value="north" data-i18n="road_direction_north">北向单行</option>
+                                <option value="south" data-i18n="road_direction_south">南向单行</option>
+                                <option value="east" data-i18n="road_direction_east">东向单行</option>
+                                <option value="west" data-i18n="road_direction_west">西向单行</option>
+                                <option value="northeast" data-i18n="road_direction_northeast">东北向单行</option>
+                                <option value="northwest" data-i18n="road_direction_northwest">西北向单行</option>
+                                <option value="southeast" data-i18n="road_direction_southeast">东南向单行</option>
+                                <option value="southwest" data-i18n="road_direction_southwest">西南向单行</option>
+                            </select>
+                        </div>
+                        <button id="add-road" data-i18n="add_road">添加道路</button>
+                        <button id="clear-roads" class="danger" data-i18n="clear_roads">清除所有道路</button>
+                    </div>
+                </div>
+
+                <!-- ==================== 路网信息 ==================== -->
+                <div class="tab-content" id="road-info">
+                    <!-- 路网概览 -->
+                    <div class="section">
+                        <h2 data-i18n="road_overview">路网概览</h2>
+                        <div id="road-stats">
+                            <div class="loading" data-i18n="loading_road_data">正在加载路网数据...</div>
+                        </div>
+                    </div>
+
+                    <!-- 节点拥堵控制 -->
+                    <div class="section">
+                        <h2 data-i18n="node_congestion_control">节点拥堵控制</h2>
+                        <div class="form-group">
+                            <label for="congestion-node" data-i18n="select_node">选择节点</label>
+                            <select id="congestion-node">
+                                <option value="" data-i18n="select_node_placeholder">请选择节点</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button id="set-node-normal" class="success" data-i18n="set_normal">正常</button>
+                            <button id="set-node-light" data-i18n="set_light_congestion">轻微拥堵</button>
+                            <button id="set-node-medium" data-i18n="set_medium_congestion">中度拥堵</button>
+                            <button id="set-node-severe" class="danger" data-i18n="set_severe_congestion">严重拥堵</button>
+                        </div>
+                        <div class="vehicle-info" data-i18n="node_congestion_hint">
+                            提示：节点拥堵会影响所有与该节点相连的道路，拥堵级别越高影响越大
+                        </div>
+                    </div>
+
+                    <!-- 道路状态控制 -->
+                    <div class="section">
+                        <h2 data-i18n="road_status_control">道路状态控制</h2>
+                        <div class="form-group">
+                            <label for="status-edge" data-i18n="select_road">选择道路</label>
+                            <select id="status-edge">
+                                <option value="" data-i18n="select_road_placeholder">请选择道路</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button id="set-edge-normal" class="success" data-i18n="set_normal">正常</button>
+                            <button id="set-edge-congested" class="danger" data-i18n="set_congested">拥堵</button>
+                            <button id="set-edge-construction" data-i18n="set_construction">占道施工</button>
+                            <button id="set-edge-closed" class="secondary" data-i18n="set_closed">封闭</button>
+                        </div>
+                        <div class="vehicle-info">
+                            <strong data-i18n="road_status_hint">提示：</strong><br>
+                            • <span data-i18n="road_status_normal">正常：道路可正常通行</span><br>
+                            • <span data-i18n="road_status_congested">拥堵：道路可用但拥堵，车辆会尝试绕行</span><br>
+                            • <span data-i18n="road_status_construction">占道施工：道路可用但高拥堵，通行缓慢</span><br>
+                            • <span data-i18n="road_status_closed">封闭：道路不可通行，车辆必须绕行</span>
+                        </div>
+                    </div>
+
+                    <!-- 自定义拥堵控制（旧版） -->
+                    <div class="section">
+                        <h2 data-i18n="custom_congestion_control_old">自定义拥堵控制（旧版）</h2>
+                        <div class="form-group">
+                            <label for="congestion-edge" data-i18n="select_road">选择道路</label>
+                            <select id="congestion-edge">
+                                <option value="" data-i18n="select_road_placeholder">请选择道路</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button id="set-congested" class="danger" data-i18n="set_congested_old">设为拥堵</button>
+                            <button id="set-normal" class="success" data-i18n="set_normal">设为正常</button>
+                        </div>
+                        <div class="vehicle-info" data-i18n="old_congestion_hint">
+                            提示：此功能已升级为"道路状态控制"，建议使用新版功能
+                        </div>
+                    </div>
+
+                    <!-- 道路方向控制 -->
+                    <div class="section">
+                        <h2 data-i18n="road_direction_control">道路方向控制</h2>
+                        <div class="info-box" data-i18n="direction_control_hint">
+                            💡 提示：现在可以直接点击地图上的道路来设置方向和状态，无需在此选择。
+                        </div>
+                        <details>
+                            <summary data-i18n="old_direction_settings">旧版方向设置（已弃用，点击展开）</summary>
+                            <div class="form-group">
+                                <label for="direction-edge" data-i18n="select_road">选择道路</label>
+                                <select id="direction-edge">
+                                    <option value="" data-i18n="select_road_placeholder">请选择道路</option>
+                                </select>
+                            </div>
+                            <div class="direction-controls">
+                                <button id="set-two-way" class="success" data-i18n="road_direction_two_way">双向通行</button>
+                                <button id="set-north" data-i18n="road_direction_north">北向单行</button>
+                                <button id="set-south" data-i18n="road_direction_south">南向单行</button>
+                                <button id="set-east" data-i18n="road_direction_east">东向单行</button>
+                                <button id="set-west" data-i18n="road_direction_west">西向单行</button>
+                                <button id="set-northeast" data-i18n="road_direction_northeast">东北单行</button>
+                                <button id="set-northwest" data-i18n="road_direction_northwest">西北单行</button>
+                                <button id="set-southeast" data-i18n="road_direction_southeast">东南单行</button>
+                                <button id="set-southwest" data-i18n="road_direction_southwest">西南单行</button>
+                            </div>
+                        </details>
+                        <div class="vehicle-info" data-i18n="road_direction_hint">
+                            提示：单向道路只允许指定方向行驶
+                        </div>
+                    </div>
+
+                    <!-- 道路信息 -->
+                    <div class="section">
+                        <h2 data-i18n="road_info_list">道路信息</h2>
+                        <div id="road-list">
+                            <div class="loading" data-i18n="loading_road_list">正在加载道路数据...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== 实时监控 ==================== -->
+                <div class="tab-content" id="monitor">
+                    <!-- 实时监控数据 -->
+                    <div class="section">
+                        <h2 data-i18n="real_time_monitoring">实时监控数据 <span id="ws-status-indicator" data-i18n="ws_status_polling">🔴 轮询模式</span></h2>
+                        <div id="monitor-data">
+                            <div class="loading" data-i18n="loading_monitor_data">正在加载监控数据...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 数据可视化图表 -->
+                    <div class="section">
+                        <h2 data-i18n="data_visualization">数据可视化</h2>
+                        <div class="charts-grid">
+                            <div class="chart-container">
+                                <h3 data-i18n="efficiency_trend">效率趋势</h3>
+                                <div class="chart-wrapper">
+                                    <canvas id="efficiency-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <h3 data-i18n="vehicle_type_distribution">车辆类型分布</h3>
+                                <div class="chart-wrapper">
+                                    <canvas id="vehicle-type-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container full-width">
+                            <h3 data-i18n="road_congestion_top10">道路拥堵情况（Top 10）</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="congestion-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 调度结果 -->
+                    <div class="section">
+                        <h2 data-i18n="dispatch_results">调度结果</h2>
+                        <div id="dispatch-results">
+                            <div class="loading" data-i18n="no_dispatch_results">暂无调度结果</div>
+                        </div>
+                    </div>
+
+                    <!-- 到达统计 -->
+                    <div class="section">
+                        <h2 data-i18n="arrival_statistics">到达统计</h2>
+                        <div id="arrival-summary" class="status-card" data-i18n="no_arrival_data">暂无到达数据</div>
+                        <div id="route-stats-list" class="route-stats-list">
+                            <div class="loading" data-i18n="no_route_statistics">暂无路线统计</div>
+                        </div>
+                        <h3 data-i18n="latest_arrival_records">最新到达记录</h3>
+                        <div id="arrival-list" class="arrival-list">
+                            <div class="loading" data-i18n="no_arrival_records">暂无到达记录</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== 车辆配置 ==================== -->
+                <div class="tab-content" id="vehicle-config">
+                    <!-- 车辆类型配置 -->
+                    <div class="section">
+                        <h2 data-i18n="vehicle_type_config">车辆类型配置</h2>
+                        <div id="vehicle-types-list">
+                            <div class="loading" data-i18n="loading_vehicle_types">正在加载车辆类型配置...</div>
+                        </div>
+                    </div>
+
+                    <!-- 添加新车辆类型 -->
+                    <div class="section">
+                        <h2 data-i18n="add_new_vehicle_type">添加新车辆类型</h2>
+                        <div class="form-group">
+                            <label for="new-vehicle-type" data-i18n="new_vehicle_type_name">车辆类型名称</label>
+                            <input type="text" id="new-vehicle-type" data-i18n-placeholder="new_vehicle_type_placeholder" placeholder="例如: 消防车">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-speed-kmph" data-i18n="new_speed_kmph">速度 (km/h)</label>
+                            <input type="number" id="new-speed-kmph" min="1" max="120" step="1" value="30">
+                            <div class="vehicle-info" data-i18n="speed_range_hint">建议范围 5-80 km/h，根据车辆类型调整</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-can-use-one-way" data-i18n="can_use_one_way">可使用单向道路</label>
+                            <select id="new-can-use-one-way">
+                                <option value="true" data-i18n="yes">是</option>
+                                <option value="false" data-i18n="no">否</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-can-use-two-way" data-i18n="can_use_two_way">可使用双向道路</label>
+                            <select id="new-can-use-two-way">
+                                <option value="true" data-i18n="yes">是</option>
+                                <option value="false" data-i18n="no">否</option>
+                            </select>
+                        </div>
+                        <button id="add-vehicle-type" data-i18n="add_new_vehicle_type">添加车辆类型</button>
+                    </div>
+                </div>
+
+                <!-- ==================== 行驶时间数据库 ==================== -->
+                <div class="tab-content" id="travel-time-db">
+                    <div class="section">
+                        <h2 data-i18n="travel_time_database">行驶时间数据库</h2>
+                        <div class="travel-db-controls">
+                            <button id="refresh-travel-db" data-i18n="refresh">刷新</button>
+                            <button id="export-travel-db" data-i18n="export_json">导出 JSON</button>
+                            <button id="export-travel-db-excel" data-i18n="export_excel">导出 Excel</button>
+                            <button id="import-travel-db" data-i18n="import_json_excel">导入 JSON/Excel</button>
+                            <button id="save-travel-db" data-i18n="save_to_file">保存到文件</button>
+                            <select id="travel-db-import-mode">
+                                <option value="append" data-i18n="import_mode_append">追加导入</option>
+                                <option value="replace" data-i18n="import_mode_replace">覆盖导入</option>
+                            </select>
+                            <button id="clear-travel-db" class="danger" data-i18n="clear_data">清除数据</button>
+                            <span class="travel-db-hint" data-i18n="import_export_hint">支持 JSON 与 Excel (.xlsx) 文件导入/导出，用于分析路线耗时数据</span>
+                            <input type="file" id="travel-db-file" accept="application/json,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" class="hidden">
+                        </div>
+                        
+                        <!-- 清除数据对话框 -->
+                        <div id="clear-db-dialog" class="warning-box">
+                            <h3 data-i18n="clear_db_dialog_title">清除行驶时间数据库</h3>
+                            <div class="form-group">
+                                <label>
+                                    <input type="radio" name="clear-mode" value="all" checked> <span data-i18n="clear_all_data">清除所有数据</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="radio" name="clear-mode" value="filter"> <span data-i18n="clear_by_filter">按条件清除</span>
+                                </label>
+                            </div>
+                            <div id="clear-filters" class="hidden">
+                                <div class="form-group">
+                                    <label data-i18n="clear_before_date">清除此日期之前的记录</label>
+                                    <input type="datetime-local" id="clear-before-date">
+                                </div>
+                                <div class="form-group">
+                                    <label data-i18n="clear_after_date">清除此日期之后的记录</label>
+                                    <input type="datetime-local" id="clear-after-date">
+                                </div>
+                                <div class="form-group">
+                                    <label data-i18n="clear_by_driver">清除指定司机的记录（司机ID）</label>
+                                    <input type="text" id="clear-driver-id" data-i18n-placeholder="clear_by_driver_placeholder" placeholder="留空则不限制">
+                                </div>
+                                <div class="form-group">
+                                    <label data-i18n="clear_by_vehicle_type">清除指定车辆类型的记录</label>
+                                    <select id="clear-vehicle-type">
+                                        <option value="" data-i18n="all_types">全部</option>
+                                        <option value="渣土车">渣土车</option>
+                                        <option value="材料车">材料车</option>
+                                        <option value="工程车">工程车</option>
+                                        <option value="特种车">特种车</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="button-group">
+                                <button id="confirm-clear-db" class="danger" data-i18n="confirm_clear">确认清除</button>
+                                <button id="cancel-clear-db" class="secondary" data-i18n="cancel">取消</button>
+                            </div>
+                        </div>
+                        
+                        <div class="status-card travel-db-summary" id="travel-db-summary" data-i18n="no_data">暂无数据</div>
+                        <div class="table-scroll">
+                            <table class="travel-db-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="driver_column">司机</th>
+                                        <th data-i18n="vehicle_type_column">车辆类型</th>
+                                        <th data-i18n="route_column">起点 → 终点</th>
+                                        <th data-i18n="time_column">用时 (分钟)</th>
+                                        <th data-i18n="distance_column">距离</th>
+                                        <th data-i18n="avg_speed_column">平均速度</th>
+                                        <th data-i18n="speed_setting_column">速度设定</th>
+                                        <th data-i18n="departure_time_column">出发时间</th>
+                                        <th data-i18n="arrival_time_column">到达时间</th>
+                                        <th data-i18n="route_nodes_column">路线节点数</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="travel-db-tbody">
+                                    <tr>
+                                        <td colspan="10" data-i18n="no_data">暂无数据</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 深度学习路径优化 -->
+                    <div class="section">
+                        <h2 data-i18n="dqn_path_optimization">深度学习路径优化（DQN）请使用JSON格式导入</h2>
+                        <div class="status-card" id="dqn-status-card">
+                            <div><strong data-i18n="dqn_status">状态：</strong><span id="dqn-status-text" data-i18n="dqn_status_not_checked">尚未检测</span></div>
+                            <div class="vehicle-info" id="dqn-status-hint" data-i18n="dqn_status_hint">需先训练后才能调用深度学习路径。</div>
+                            <button id="dqn-check-status" data-i18n="refresh_status">刷新状态</button>
+                        </div>
+
+                        <!-- 训练参数 -->
+                        <div class="status-card param-card">
+                            <h3 data-i18n="training_params">训练参数</h3>
+                            <div class="form-group">
+                                <label for="dqn-epochs" data-i18n="training_epochs">训练轮次</label>
+                                <input type="number" id="dqn-epochs" value="5" min="1" max="50">
+                            </div>
+                            <div class="form-group">
+                                <label for="dqn-batch" data-i18n="batch_size">批量大小</label>
+                                <input type="number" id="dqn-batch" value="64" min="16" max="512" step="16">
+                            </div>
+                            <div class="form-group">
+                                <label for="dqn-gamma" data-i18n="discount_factor">折扣系数 (0-1)</label>
+                                <input type="number" id="dqn-gamma" value="0.95" min="0.1" max="0.99" step="0.01">
+                            </div>
+                            <button id="dqn-train-btn" class="success" data-i18n="start_training">开始训练</button>
+                            <div class="vehicle-info" id="dqn-train-result" data-i18n="training_not_started">训练未开始</div>
+                        </div>
+
+                        <!-- DQN 路径规划 -->
+                        <div class="status-card param-card">
+                            <h3 data-i18n="dqn_route_planning">DQN 路径规划</h3>
+                            <div class="form-group">
+                                <label for="dqn-start-node" data-i18n="start_node">起点节点</label>
+                                <select id="dqn-start-node"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="dqn-target-node" data-i18n="target_node">目标节点</label>
+                                <select id="dqn-target-node"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="dqn-epsilon" data-i18n="exploration_rate">探索率 ε (0-1)</label>
+                                <input type="number" id="dqn-epsilon" value="0.0" min="0" max="1" step="0.05">
+                            </div>
+                            <button id="dqn-route-btn" data-i18n="use_dqn_plan">使用 DQN 规划</button>
+                            <div class="vehicle-info" id="dqn-route-output" data-i18n="not_called">尚未调用</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== 司机入口 ==================== -->
+                <div class="tab-content" id="driver-portal">
+                    <!-- 二维码生成 -->
+                    <div class="section">
+                        <h2 data-i18n="qrcode_generation">二维码生成</h2>
+                        <div class="status-card" id="server-info">
+                            <div class="loading" data-i18n="getting_server_info">正在获取服务器信息...</div>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="driver_interface_url">司机界面访问地址</label>
+                            <div class="button-group">
+                                <input type="text" id="driver-url">
+                                <button id="copy-url" data-i18n="copy">复制</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="manual_url_input">或手动输入完整地址（如果需要自定义）</label>
+                            <input type="text" id="manual-url" data-i18n-placeholder="manual_url_placeholder" placeholder="例如: https://example.com/driver 或 http://192.168.1.100:5000/driver">
+                            <button id="update-url" data-i18n="update_url">更新地址</button>
+                        </div>
+                        <button id="generate-qrcode" class="success" data-i18n="generate_qrcode">生成二维码</button>
+                        
+                        <div id="qrcode-container" class="hidden">
+                            <div id="qrcode"></div>
+                            <div class="vehicle-info" data-i18n="qrcode_hint">司机可使用手机扫描此二维码进入路线规划界面</div>
+                            <div id="qrcode-hint" class="vehicle-info"></div>
+                        </div>
+                    </div>
+
+                    <!-- 司机管理 -->
+                    <div class="section">
+                        <h2 data-i18n="driver_management">司机管理</h2>
+                        <div id="driver-summary" class="status-card">
+                            <span data-i18n="registered_drivers">已注册司机:</span> 0 <span data-i18n="drivers_count">人</span>
+                        </div>
+                        <div class="info-box" data-i18n="driver_management_hint">
+                            💡 提示：司机可以通过司机界面规划路线并提交为实际车辆，提交的车辆会显示在"车辆调度"标签页中
+                        </div>
+                        
+                        <!-- 司机列表 -->
+                        <h3 data-i18n="registered_drivers_list">已注册司机列表</h3>
+                        <div id="driver-list" class="node-list">
+                            <div class="loading" data-i18n="loading_drivers">加载中...</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="driver-id" data-i18n="driver_id">司机ID</label>
+                            <input type="text" id="driver-id" data-i18n-placeholder="driver_id_placeholder" placeholder="例如: D001">
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-name" data-i18n="driver_name">姓名</label>
+                            <input type="text" id="driver-name" data-i18n-placeholder="driver_name_placeholder" placeholder="司机姓名">
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-license-plate" data-i18n="license_plate">车牌号</label>
+                            <input type="text" id="driver-license-plate" data-i18n-placeholder="license_plate_placeholder" placeholder="请输入车牌号">
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-vehicle-type" data-i18n="vehicle_type">车辆类型</label>
+                            <select id="driver-vehicle-type"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-weight" data-i18n="vehicle_weight">载重 (吨)</label>
+                            <input type="number" id="driver-weight" min="1" max="80" value="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-width" data-i18n="vehicle_width">宽度 (米)</label>
+                            <input type="number" id="driver-width" min="1" max="8" step="0.1" value="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-contact" data-i18n="driver_contact">联系方式</label>
+                            <input type="text" id="driver-contact" data-i18n-placeholder="driver_contact_placeholder" placeholder="手机号或其他联系方式">
+                        </div>
+                        <button id="driver-register" class="success" data-i18n="register_update_driver">注册 / 更新司机信息</button>
+                        
+                        <!-- 司机详细信息模态框 -->
+                        <div id="driver-detail-modal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3 data-i18n="driver_details">司机详细信息</h3>
+                                    <button id="close-driver-detail" class="modal-close" data-i18n="close">关闭</button>
+                                </div>
+                                <div id="driver-detail-content"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 路径预测 -->
+                    <div class="section">
+                        <h2 data-i18n="route_prediction">路径预测</h2>
+                        <div class="form-group">
+                            <label for="driver-start-node" data-i18n="start_node">起点节点</label>
+                            <select id="driver-start-node"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="driver-target-node" data-i18n="target_node">目标节点</label>
+                            <select id="driver-target-node"></select>
+                        </div>
+                        <button id="driver-plan-route" data-i18n="calculate_recommended_route">计算推荐路线</button>
+                        <div id="driver-route-result" class="status-card">
+                            <div class="vehicle-info" data-i18n="route_planning_not_done">尚未进行路线规划</div>
+                        </div>
+                    </div>
+
+                    <!-- 历史记录 -->
+                    <div class="section">
+                        <h2 data-i18n="history">历史记录</h2>
+                        <div id="driver-route-history" class="node-list">
+                            <div class="loading" data-i18n="no_history">尚无历史记录</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 拖动条 ==================== -->
+        <div class="resizer" id="drag-resizer" data-i18n-title="drag_resizer_title" title="拖动调整宽度"></div>
+
+        <!-- ==================== 地图容器 ==================== -->
+        <div class="map-container">
+            <div class="map-header">
+                <h2 data-i18n="construction_site_map">工地路网地图</h2>
+                <!-- 语言切换器 -->
+                <div class="lang-switcher">
+                    <button class="lang-btn active" data-lang="zh" title="中文">中文</button>
+                    <button class="lang-btn" data-lang="ru" title="Русский">РУ</button>
+                </div>
+            </div>
+            <div class="map-content">
+                <div class="map-wrapper">
+                    <div id="map">
+                        <canvas id="map-canvas"></canvas>
+                        <div class="loading">请上传自定义地图或使用默认地图</div>
+                    </div>
+                </div>
+                <div class="map-side-panel">
+                    <!-- 控制面板 -->
+                    <div class="map-controls" data-i18n-title="map_controls_title" title="点击按钮使用功能">
+                        <div class="map-controls-title" data-i18n="map_controls">控制面板</div>
+                        <button id="toggle-edit-mode" data-i18n="edit_mode_off">编辑模式: 关闭</button>
+                        <button id="toggle-labels" data-i18n="labels_all">标签: 全部显示</button>
+                        <button id="toggle-gps-icons" data-i18n="gps_icons_show">GPS图标: 显示</button>
+                        
+                        <!-- 地图旋转控制 -->
+                        <div class="map-rotation-controls">
+                            <div class="label" data-i18n="map_rotation">地图旋转</div>
+                            <div class="rotation-input-group">
+                                <input type="number" id="map-rotation-input" value="0" step="0.1" min="-180" max="180" placeholder="0">
+                                <span data-i18n="degrees">°</span>
+                                <button id="apply-map-rotation" data-i18n="apply">应用</button>
+                                <button id="reset-map-rotation" data-i18n="reset">重置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 图例 -->
+                    <div class="legend" id="map-legend">
+                        <div class="legend-header" id="legend-toggle">
+                            <span data-i18n="legend">图例</span>
+                            <span class="legend-toggle">▼</span>
+                        </div>
+                        <div class="legend-content">
+                            <div class="legend-section">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#2ecc71;"></div><span data-i18n="legend_end_point">尽头点</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#3498db;"></div><span data-i18n="legend_crossroad">交叉口</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e74c3c;"></div><span data-i18n="legend_work_area">作业区</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#9b59b6;"></div><span data-i18n="legend_external_start">场外起点</span>
+                                </div>
+                            </div>
+                            <div class="legend-section">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#f39c12;"></div><span data-i18n="legend_truck">渣土车</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#8e44ad;"></div><span data-i18n="legend_material">材料车</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#16a085;"></div><span data-i18n="legend_construction">工程车</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e74c3c;"></div><span data-i18n="legend_special">特种车</span>
+                                </div>
+                            </div>
+                            <div class="legend-section">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e67e22;"></div><span data-i18n="legend_one_way">单向道路</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e74c3c;"></div><span data-i18n="legend_congested_road">拥堵道路</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#f39c12;"></div><span data-i18n="legend_construction_road">占道施工</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#95a5a6;"></div><span data-i18n="legend_closed_road">封闭道路</span>
+                                </div>
+                            </div>
+                            <div class="legend-section">
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#f39c12; border: 2px solid #e67e22;"></div><span data-i18n="legend_light_congestion">轻微拥堵节点</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e67e22; border: 2px solid #d35400;"></div><span data-i18n="legend_medium_congestion">中度拥堵节点</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background:#e74c3c; border: 2px solid #c0392b;"></div><span data-i18n="legend_severe_congestion">严重拥堵节点</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/traffic_system.js"></script>
+</body>
+
+</html>

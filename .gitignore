@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+traffic_system.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 数据文件（不提交到GitHub）
+system_checkpoint.json
+travel_time_database.json
+travel_db_backups/
+*.json.bak
+
+# 备份和压缩文件
+*.zip
+*.bak
+*.backup
+
+# SSL证书（敏感信息）
+ssl/
+*.key
+*.crt
+*.pem
+
+# 测试覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 临时文件
+*.tmp
+*.cache
+
+# 论文相关文件（可选，如果不想上传）
+# 第七章_结论与展望.md
+# 致谢.md
