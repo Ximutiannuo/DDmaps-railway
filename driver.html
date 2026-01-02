@@ -4313,7 +4313,6 @@
 
             // 显示路线结果
             function displayRouteResult(route) {
-                const resultDiv = document.getElementById('route-result');
                 const contentDiv = document.getElementById('result-content');
 
                 // 检查当前模式
@@ -4516,7 +4515,6 @@
 
                         if (isGpsMode) {
                             // GPS模式：隐藏路线结果内容，只显示中断导航按钮
-                            const resultDiv = document.getElementById('route-result');
                             const contentDiv = document.getElementById('result-content');
                             const titleEl = document.getElementById('route-result-title');
                             const calculateBtn = document.getElementById('calculate-route');
@@ -4635,7 +4633,6 @@
                 const submitBtn = document.getElementById('submit-vehicle');
                 const arrivalBtn = document.getElementById('mark-arrived');
                 const cancelBtn = document.getElementById('cancel-navigation');
-                const resultDiv = document.getElementById('route-result');
                 const contentDiv = document.getElementById('result-content');
                 const titleEl = document.getElementById('route-result-title');
 
