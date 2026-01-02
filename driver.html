@@ -4631,7 +4631,6 @@
                     myVehicle = null;
                 }
 
-<<<<<<< HEAD
                 // 4. 更新按钮状态
                 const submitBtn = document.getElementById('submit-vehicle');
                 const arrivalBtn = document.getElementById('mark-arrived');
@@ -4684,29 +4683,12 @@
                     if (arrivalBtn) {
                         arrivalBtn.style.display = 'none';
                     }
-=======
-            // 5. 更新按钮状态
-            const submitBtn = document.getElementById('submit-vehicle');
-            const arrivalBtn = document.getElementById('mark-arrived');
-            if (submitBtn) {
-                submitBtn.style.display = 'block';
-                submitBtn.disabled = false;
-                submitBtn.textContent = texts.submit_vehicle || '✅ 提交为实际车辆';
-            }
-            if (arrivalBtn) {
-                arrivalBtn.style.display = 'none';
->>>>>>> 3f6217840caedac19671347cee77977866657b6c
                 }
 
                 // 6. 重新渲染地图（清除路线高亮）
                 renderMap();
 
                 // 7. 根据当前模式重新定位起点
-<<<<<<< HEAD
-=======
-            const vehicleModeValue = document.querySelector('.active-mode-radio:checked')?.value || 'auto';
-
->>>>>>> 3f6217840caedac19671347cee77977866657b6c
                 if (vehicleModeValue === 'gps') {
                     // GPS模式：重新获取GPS位置并更新起点
                     showAlert('info', texts.navigation_cancelled + ' ' + (texts.relocating_gps || '正在重新获取GPS位置...'));
@@ -6871,7 +6853,6 @@
                                 }
                             }
 
-<<<<<<< HEAD
                             // 如果还没开始拖动，检查是否应该开始拖动
                             // 这样可以支持从节点开始拖动
                             if (!isDragging && !isPinching) {
@@ -6902,12 +6883,6 @@
                                     touchMoved = true; // 标记为已移动
                                 }
                             }
-=======
-                        // 实时更新地图位置
-                        mapTranslateX += adjustedDeltaX;
-                        mapTranslateY += adjustedDeltaY;
-                            updateMapTransform();
->>>>>>> 3f6217840caedac19671347cee77977866657b6c
 
                             // 如果正在拖动，更新地图位置
                             if (isDragging && !isPinching) {
