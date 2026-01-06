@@ -1,5 +1,5 @@
 # 工地交通调度系统
-管理端请访问https://wdd123456.pythonanywhere.com/ 查看，司机端请访问 https://wdd123456.pythonanywhere.com/driver 查看
+管理端请访问https://dpcydd.pythonanywhere.com/查看，司机端请访问https://dpcydd.pythonanywhere.com/driver查看
 
 基于WebSocket实时通信和深度强化学习的工地交通调度系统
 
